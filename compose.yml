@@ -3,7 +3,7 @@ version: '3.8'
 services:
   managment:
     image: ghcr.io/greenzonepc/managment:latest
-    platform: linux/amd64
+    # platform: linux/amd64
     ports:
       - "8080:8080"
     environment:
