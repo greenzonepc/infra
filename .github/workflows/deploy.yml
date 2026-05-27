@@ -9,14 +9,12 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    permissions:
-      packages: read
 
     steps:
       - name: Deploy to VPS
         uses: appleboy/ssh-action@v1.0.3
         env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_TOKEN: ${{ secrets.GHCR_TOKEN }}
           GHCR_USER: ${{ github.actor }}
         with:
           host: ${{ secrets.VPS_HOST }}
