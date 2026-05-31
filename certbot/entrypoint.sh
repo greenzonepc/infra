@@ -32,6 +32,7 @@ obtain_cert() {
     certbot certonly --dns-cloudflare \
         --dns-cloudflare-credentials "${CF_CREDS}" \
         --dns-cloudflare-propagation-seconds 30 \
+        --cert-name "${DOMAIN}" \
         -d "${DOMAIN}" -d "www.${DOMAIN}" \
         --email "${EMAIL}" --agree-tos --no-eff-email \
         --non-interactive --keep-until-expiring
@@ -40,6 +41,9 @@ obtain_cert() {
 if [ -f "${RENEWAL_CONF}" ]; then
     echo "[certbot] Existing Let's Encrypt certificate found for ${DOMAIN}"
 else
+    # No renewal config means any existing live/ dir is just our self-signed
+    # placeholder. Remove it so certbot can write a clean lineage.
+    rm -rf "${LIVE_DIR}" "/etc/letsencrypt/archive/${DOMAIN}"
     echo "[certbot] Requesting Let's Encrypt certificate for ${DOMAIN} via Cloudflare DNS-01"
     if obtain_cert; then
         echo "[certbot] Certificate obtained; nginx will start with the real certificate"
