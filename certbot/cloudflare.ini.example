@@ -1,0 +1,5 @@
+# Copy this file to certbot/cloudflare.ini on the host and fill in your token.
+# Create the token in Cloudflare: My Profile > API Tokens > Create Token,
+# scoped to Zone > DNS > Edit for the greenzonepc.com zone.
+# Then: chmod 600 certbot/cloudflare.ini
+dns_cloudflare_api_token = your-cloudflare-api-token-here

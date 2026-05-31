@@ -52,14 +52,17 @@ services:
       CERTBOT_EMAIL: cicero956@gmail.com
     volumes:
       - ./certbot/entrypoint.sh:/entrypoint.sh:ro
+      - ./certbot/cloudflare.ini:/cloudflare.ini:ro
       - certbot_conf:/etc/letsencrypt
       - certbot_www:/var/www/certbot
     healthcheck:
       # nginx waits on this so it never starts without a certificate on disk.
+      # start_period gives the initial DNS-01 issuance time before failures count.
       test: ["CMD-SHELL", "test -f /etc/letsencrypt/live/greenzonepc.com/fullchain.pem"]
       interval: 5s
       timeout: 5s
-      retries: 24
+      retries: 12
+      start_period: 180s
     restart: unless-stopped
 
   postgres:
