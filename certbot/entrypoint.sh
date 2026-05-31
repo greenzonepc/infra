@@ -28,6 +28,15 @@ make_placeholder() {
         -subj "/CN=${DOMAIN}" >/dev/null 2>&1
 }
 
+# True only when a real (CA-issued, not self-signed) certificate is present.
+# The placeholder is self-signed, so its issuer equals its subject.
+cert_is_real() {
+    [ -f "${LIVE_DIR}/fullchain.pem" ] || return 1
+    _issuer=$(openssl x509 -in "${LIVE_DIR}/fullchain.pem" -noout -issuer 2>/dev/null) || return 1
+    _subject=$(openssl x509 -in "${LIVE_DIR}/fullchain.pem" -noout -subject 2>/dev/null) || return 1
+    [ -n "${_issuer}" ] && [ "${_issuer}" != "${_subject}" ]
+}
+
 obtain_cert() {
     certbot certonly --dns-cloudflare \
         --dns-cloudflare-credentials "${CF_CREDS}" \
@@ -38,12 +47,12 @@ obtain_cert() {
         --non-interactive --keep-until-expiring
 }
 
-if [ -f "${RENEWAL_CONF}" ]; then
+if cert_is_real; then
     echo "[certbot] Existing Let's Encrypt certificate found for ${DOMAIN}"
 else
-    # No renewal config means any existing live/ dir is just our self-signed
-    # placeholder. Remove it so certbot can write a clean lineage.
-    rm -rf "${LIVE_DIR}" "/etc/letsencrypt/archive/${DOMAIN}"
+    # Only a placeholder, a broken lineage, or nothing exists. Wipe any partial
+    # state for this domain so certbot can write a clean lineage.
+    rm -rf "${LIVE_DIR}" "/etc/letsencrypt/archive/${DOMAIN}" "${RENEWAL_CONF}"
     echo "[certbot] Requesting Let's Encrypt certificate for ${DOMAIN} via Cloudflare DNS-01"
     if obtain_cert; then
         echo "[certbot] Certificate obtained; nginx will start with the real certificate"
