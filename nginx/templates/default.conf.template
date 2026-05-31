@@ -6,7 +6,7 @@
 # --------------------
 server {
     listen 80;
-    server_name ${DOMAIN} www.${DOMAIN};
+    server_name ${DOMAIN} www.${DOMAIN} admin.${DOMAIN};
 
     # Let's Encrypt webroot challenge (shared volume with the certbot service)
     location /.well-known/acme-challenge/ {
@@ -77,6 +77,43 @@ server {
 
         expires 30d;
         add_header Cache-Control "public, immutable";
+    }
+
+    # --------------------
+    # Basic security headers
+    # --------------------
+    add_header X-Content-Type-Options nosniff;
+    add_header X-Frame-Options SAMEORIGIN;
+    add_header X-XSS-Protection "1; mode=block";
+}
+
+# --------------------
+# HTTPS — admin subdomain → management service (port 8080)
+# --------------------
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name admin.${DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+    ssl_session_cache   shared:SSL:10m;
+    ssl_session_timeout 1d;
+
+    location / {
+        proxy_pass http://managment:8080;
+        proxy_http_version 1.1;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # WebSocket support (safe to include even if unused)
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
     }
 
     # --------------------

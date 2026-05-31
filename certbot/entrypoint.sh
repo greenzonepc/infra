@@ -18,6 +18,9 @@ if [ ! -f "${CF_CREDS_SRC}" ]; then
 fi
 install -m 600 "${CF_CREDS_SRC}" "${CF_CREDS}"
 
+# Every name the certificate must cover.
+DOMAINS="${DOMAIN} www.${DOMAIN} admin.${DOMAIN}"
+
 make_placeholder() {
     # Self-signed cert so nginx's HTTPS server block can load before the real
     # certificate exists. Short lived on purpose.
@@ -37,23 +40,42 @@ cert_is_real() {
     [ -n "${_issuer}" ] && [ "${_issuer}" != "${_subject}" ]
 }
 
+# True when a real cert is present AND its SAN list covers every name in $DOMAINS.
+cert_covers_all() {
+    cert_is_real || return 1
+    _text=$(openssl x509 -in "${LIVE_DIR}/fullchain.pem" -noout -text 2>/dev/null) || return 1
+    for _d in ${DOMAINS}; do
+        echo "${_text}" | grep -qF "DNS:${_d}" || return 1
+    done
+    return 0
+}
+
 obtain_cert() {
+    # Build "-d name" args from $DOMAINS. --expand grows an existing lineage to
+    # include any newly added names.
+    set --
+    for _d in ${DOMAINS}; do set -- "$@" -d "${_d}"; done
     certbot certonly --dns-cloudflare \
         --dns-cloudflare-credentials "${CF_CREDS}" \
         --dns-cloudflare-propagation-seconds 30 \
-        --cert-name "${DOMAIN}" \
-        -d "${DOMAIN}" -d "www.${DOMAIN}" \
+        --cert-name "${DOMAIN}" --expand \
+        "$@" \
         --email "${EMAIL}" --agree-tos --no-eff-email \
         --non-interactive --keep-until-expiring
 }
 
-if cert_is_real; then
-    echo "[certbot] Existing Let's Encrypt certificate found for ${DOMAIN}"
+if cert_covers_all; then
+    echo "[certbot] Existing certificate already covers: ${DOMAINS}"
+elif cert_is_real; then
+    # A valid cert exists but is missing a name (e.g. admin was just added).
+    # Expand in place — do not wipe, so a failure leaves the good cert intact.
+    echo "[certbot] Expanding existing certificate to cover: ${DOMAINS}"
+    obtain_cert || echo "[certbot] Expansion failed; keeping the current certificate"
 else
     # Only a placeholder, a broken lineage, or nothing exists. Wipe any partial
     # state for this domain so certbot can write a clean lineage.
     rm -rf "${LIVE_DIR}" "/etc/letsencrypt/archive/${DOMAIN}" "${RENEWAL_CONF}"
-    echo "[certbot] Requesting Let's Encrypt certificate for ${DOMAIN} via Cloudflare DNS-01"
+    echo "[certbot] Requesting Let's Encrypt certificate via Cloudflare DNS-01 for: ${DOMAINS}"
     if obtain_cert; then
         echo "[certbot] Certificate obtained; nginx will start with the real certificate"
     else
